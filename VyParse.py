@@ -163,9 +163,6 @@ def Tokenise(source: str, variables_are_digraphs=False):
             tokens.append((Structure.STRING, character))
             token_pointer += 1
             continue
-        if type(character) is list:
-            tokens.append((Structure.STRING, character))
-            continue
 
         # Now we move onto the possibility that we are starting a new kind of token        
         if character in OPEN:
