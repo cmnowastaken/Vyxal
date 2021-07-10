@@ -95,7 +95,7 @@ structure_dictionary = (
             "ƛ",
             ";",
             Keys.LAMBDA_BODY,
-            Keys.LAMBDA_ARGS,
+            Keys.LAMBDA_BODY,
             Keys.LAMBDA_BODY,
         ),  # y'know what, I will let y'all have custom map arities
         Structure.LIST: ("⟨", "⟩", Keys.LIST_ITEM, Keys.LIST_ITEM, Keys.LIST_ITEM),
@@ -284,7 +284,7 @@ def parse(source):
                 0
             ]  # there's guaranteed to only be 1, because we have determined that it is in the dictionary
             default_key = structure_dictionary[structure][2]
-            active_key = default_key
+            active_key = structure_dictionary[structure][3]
             structure_data[active_key] = ""
             nest_level += 1
 
@@ -321,8 +321,6 @@ def parse(source):
 
         elif character == "|" and nest_level == 1:
             active_key = structure_dictionary[structure][-1]
-            if structure == Structure.LAMBDA:
-                structure_data[Keys.LAMBDA_ARGS] = structure_data[Keys.LAMBDA_BODY]
             if structure == Structure.LIST:
                 structure_data[Keys.LIST_ITEMS].append(structure_data[Keys.LIST_ITEM])
 
