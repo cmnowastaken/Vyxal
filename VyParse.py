@@ -22,10 +22,10 @@ class Structure:
     MONAD_TRANSFORMER = 17
     DYAD_TRANSFORMER = 18
     TRIAD_TRANSFORMER = 19
-    PARA_APPLY = 20
-    LAMBDA_NEWLINE = 21
-    FILTER = 23
-    SORT = 24
+    FOUR_ARITY_TRANSFORMER = 20
+    VARY_TRANSFORMER = 21
+    PARA_APPLY = 22
+    LAMBDA_NEWLINE = 23
 
 
 class Keys:
@@ -49,17 +49,21 @@ class Keys:
     LAMBDA_GROUP = 18
 
 
-Monadic_Transformers = list("v⁽&~ß")
-Dyadic_Transformers = list("₌‡₍")
-Triadic_Transformers = list("≬")
-Grouping_Transformers = list("⁽‡≬")
+Monadic_Transformers = list("¿μςσɓƈɗƒɠɦƇƑƘƬƲȤv/\\&")
+Dyadic_Transformers = list("ξψωƁƊƓⱮƝ")
+Triadic_Transformers = list("π")
+Tetradic_Transformers = list("ρ")
+Variadic_Transformers = list("χƤφ")
+Grouping_Transformers = list("μξπρ")
+
+COLLECT_UNTIL_NEWLINE = "χ"
+PARA_APPLY_VARIADIC = "Ƥ"
 
 
 class Digraphs:
     NUMERIC = "∆"
     STRING = "ø"
     LIST = "Þ"
-    CODEPAGE = "⁺"
     MISC = "¨"
     CONSTANT = "k"
     ALL_DIGRAPHS = "k∆øÞ¨"
@@ -99,20 +103,6 @@ structure_dictionary = (
         Structure.NUMBER: ("", "", Keys.NUMBER, Keys.NUMBER, Keys.NUMBER),
         Structure.VAR_GET: ("", "", Keys.VAR_NAME, Keys.VAR_NAME, Keys.VAR_NAME),
         Structure.VAR_SET: ("", "", Keys.VAR_NAME, Keys.VAR_NAME, Keys.VAR_NAME),
-        Structure.FILTER: (
-            "'",
-            ";",
-            Keys.LAMBDA_BODY,
-            Keys.LAMBDA_BODY,
-            Keys.LAMBDA_BODY,
-        ),
-        Structure.SORT: (
-            "µ",
-            ";",
-            Keys.LAMBDA_BODY,
-            Keys.LAMBDA_BODY,
-            Keys.LAMBDA_BODY,
-        ),
     }
 )
 
@@ -130,9 +120,11 @@ def group_two_byte_strings(source):
         elif temp:
             temp = components.append([temp + character, "`"]) or ""
             in_string = False
+        elif type(character) is list:
+            components.append(character)
         elif in_string:
             temp = character
-        elif character in "\\⁺":
+        elif character in "'⁺":
             escaped = components.append(character) or True
         elif character == StringDelimiters.TWO_CHAR:
             in_string = True
@@ -174,7 +166,7 @@ def group_strings(source):
                 flux_string[1] += character
         elif escaped:
             escaped = components.append(character) or False
-        elif character in "\\⁺":
+        elif character in "'⁺":
             escaped = components.append(character) or True
         elif character in StringDelimiters.DELIM_TUPLE:
             flux_string = [True, "", character]
@@ -186,14 +178,10 @@ def group_strings(source):
     return components
 
 
-def group_digraphs(source, vars=False):
+def group_digraphs(source):
     components = []
     temp = ""
     escaped = False
-
-    ALL_DIGRAPHS = "k∆ø¨"
-    if vars:
-        ALL_DIGRAPHS += "→←"
 
     for character in source:
         if type(character) is list:
@@ -202,9 +190,9 @@ def group_digraphs(source, vars=False):
             escaped = components.append(character) or False
         elif temp:
             temp = components.append(temp + character) or ""
-        elif character in "\\⁺":
+        elif character in "'⁺":
             escaped = components.append(character) or True
-        elif character in ALL_DIGRAPHS:
+        elif character in Digraphs.ALL_DIGRAPHS:
             temp = character
         else:
             components.append(character)
@@ -212,8 +200,12 @@ def group_digraphs(source, vars=False):
     return components
 
 
-def Tokenise(source: str, variables_are_digraphs=False):
+def parse(source):
     tokens = []
+
+    source = group_two_byte_strings(source)
+    source = group_strings(source)
+    source = group_digraphs(source)
 
     escaped = False
     comment = False
@@ -227,32 +219,24 @@ def Tokenise(source: str, variables_are_digraphs=False):
         0  # How far deep we are, as in, are we at the uppermost level of the program?
     )
 
-    source = group_two_byte_strings(source)
-    source = group_strings(source)
-    source = group_digraphs(source, variables_are_digraphs)
-
-    token_pointer = 0
-    while token_pointer < len(source):
-
-        character = source[token_pointer]
+    for character in source:
         # print(character, nest_level, escaped, structure, tokens, active_key, default_key)
-        if comment:
-            comment = character == "\n"
-            continue
+
+        # First, we do all the conditions that require immediant moving onto the next character (hence the continue)
         if escaped:
-            if structure != Structure.NONE:
-                structure_data[active_key] += "\\" + character
-            else:
-                tokens.append((Structure.CHARACTER, character))
+            tokens.append((Structure.CHARACTER, character))
             escaped = False
             continue
-
+        if comment:
+            if character == "\n":
+                comment = False
+                tokens.append("\n")
+            continue
         if structure == Structure.NUMBER:
             if type(character) is str and character in (
                 string.digits + "."
             ):  # If the character is a digit, we keep adding to the flux number
                 structure_data[active_key] += character
-                token_pointer += 1
                 continue
             else:
                 tokens.append((Structure.NUMBER, structure_data[active_key]))
@@ -267,7 +251,6 @@ def Tokenise(source: str, variables_are_digraphs=False):
                 type(character) is str and character in string.ascii_letters + "_"
             ):  # If the character is a valid variable name letter, we keep adding to the name
                 structure_data[active_key] += character
-                token_pointer += 1
                 continue
             else:
                 tokens.append((structure, structure_data[active_key]))
@@ -277,24 +260,20 @@ def Tokenise(source: str, variables_are_digraphs=False):
                     "",
                     "",
                 )
-        if character == "\\":
+        if character == "'":
             escaped = True
-            token_pointer += 1
             continue
         if type(character) is list:
             tokens.append((Structure.STRING, character))
-            token_pointer += 1
             continue
 
         # Now we move onto the possibility that we are starting a new kind of token
         if character in OPEN:
             # Opening character. Note that this won't be variable stuff because I just handeled it. kekw very cool kanye. very cool.
             # no I'm not stalling with comments because I don't want to write the logic here. what gives you that impression?
-            # totally not directly ripped from the experimental branch
             if nest_level:
                 nest_level += 1
                 structure_data[active_key] += character
-                token_pointer += 1
                 continue  # That is, we're already in a structure, so we go deeper m'dude.
 
             structure = tuple(
@@ -317,7 +296,6 @@ def Tokenise(source: str, variables_are_digraphs=False):
             nest_level -= 1
             if nest_level:
                 structure_data[active_key] += character
-                token_pointer += 1
                 continue  # We still have things to close m'dude.
 
             if structure == Structure.MAP:
@@ -325,16 +303,7 @@ def Tokenise(source: str, variables_are_digraphs=False):
                 tokens.append(
                     (Structure.NONE, "M")
                 )  # Yes, lambda maps really are just lambda followed by M
-            elif structure == Structure.FILTER:
-                tokens.append((Structure.LAMBDA, structure_data))
-                tokens.append(
-                    (Structure.NONE, "F")
-                )  # Yes, lambda filters really are just lambda followed by F
-            elif structure == Structure.SORT:
-                tokens.append((Structure.LAMBDA, structure_data))
-                tokens.append(
-                    (Structure.NONE, "ṡ")
-                )  # Yes, lambda sorts really are just lambda followed by ṡ
+
             elif structure == Structure.LIST:
                 structure_data[Keys.LIST_ITEMS].append(structure_data[Keys.LIST_ITEM])
                 del structure_data[Keys.LIST_ITEM]
@@ -342,7 +311,7 @@ def Tokenise(source: str, variables_are_digraphs=False):
                 if default_key not in structure_data and structure != Structure.NONE:
                     structure_data[default_key] = structure_data[active_key]
                     del structure_data[active_key]
-                tokens.append((structure, structure_data))
+            tokens.append((structure, structure_data))
             structure, structure_data, active_key, default_key = (
                 Structure.NONE,
                 {},
@@ -358,12 +327,16 @@ def Tokenise(source: str, variables_are_digraphs=False):
                 structure_data[Keys.LIST_ITEMS].append(structure_data[Keys.LIST_ITEM])
 
             structure_data[active_key] = ""
+
         elif character == "#":
             comment = True
-            token_pointer += 1
-            continue
+
         elif structure != Structure.NONE:
             structure_data[active_key] += character
+
+        elif character in Monadic_Transformers:
+            tokens.append((Structure.MONAD_TRANSFORMER, (character, [tokens.pop()])))
+
         elif character in (string.digits + "."):
             structure = Structure.NUMBER
             active_key = structure_dictionary[Structure.NUMBER][2]
@@ -379,53 +352,48 @@ def Tokenise(source: str, variables_are_digraphs=False):
             active_key = structure_dictionary[Structure.VAR_SET][2]
             structure_data[active_key] = ""
 
-        elif character in Monadic_Transformers:
-            everything_after = Tokenise(source[token_pointer + 1 :])
-            tokens.append(
-                (Structure.MONAD_TRANSFORMER, (character, [everything_after[0]]))
-            )
-            tokens += everything_after[1:]
-            break
         elif character in Dyadic_Transformers:
-            everything_after = Tokenise(source[token_pointer + 1 :])
-            if character == "‡":
-                tokens.append(
-                    (Structure.LAMBDA, {Keys.LAMBDA_BODY: everything_after[0:2]})
-                )
-                structure = Structure.NONE
-                structure_data = {}
-            else:
-                tokens.append(
-                    (Structure.DYAD_TRANSFORMER, (character, everything_after[0:2]))
-                )
-            tokens += everything_after[2:]
-            break
-        elif character == Structure.TRIAD_TRANSFORMER:
-            everything_after = Tokenise(source[token_pointer + 1 :])
-            tokens.append((Structure.LAMBDA, {Keys.LAMBDA_BODY: everything_after[0:3]}))
-            tokens += everything_after[3:]
+            elements = [tokens.pop(), tokens.pop()][::-1]
+            tokens.append((Structure.DYAD_TRANSFORMER, (character, elements)))
 
+        elif character in Triadic_Transformers:
+            elements = [tokens.pop(), tokens.pop(), tokens.pop()][::-1]
+            tokens.append((Structure.TRIAD_TRANSFORMER, (character, elements)))
+
+        elif character in Tetradic_Transformers:
+            elements = [tokens.pop(), tokens.pop(), tokens.pop(), tokens.pop()][::-1]
+            tokens.append((Structure.FOUR_ARITY_TRANSFORMER, (character, elements)))
+
+        elif character in Variadic_Transformers:
+            if character == COLLECT_UNTIL_NEWLINE:
+                token_list = []
+                while len(tokens) and tokens[-1][1] != "\n":
+                    token_list.append(tokens.pop())
+                if len(tokens):
+                    tokens.pop()
+                tokens.append((Structure.LAMBDA_NEWLINE, token_list[::-1][::]))
+
+            elif character == PARA_APPLY_VARIADIC:
+                count = tokens.pop()
+                if count[0] != Structure.NUMBER:
+                    raise Exception("Count passed to Ƥ isn't a number")
+                else:
+                    token_list = []
+                    for _ in range(int(count[-1])):
+                        token_list.append(tokens.pop())
+
+                    tokens.append((Structure.PARA_APPLY, token_list[::-1][::]))
         else:
             if character != " ":
                 tokens.append((Structure.NONE, character))
-        token_pointer += 1
+
     if structure != Structure.NONE:
         if structure == Structure.MAP:
             tokens.append((Structure.LAMBDA, structure_data))
             tokens.append(
                 (Structure.NONE, "M")
             )  # Yes, lambda maps really are just lambda followed by M
-        elif structure == Structure.FILTER:
-            tokens.append((Structure.LAMBDA, structure_data))
-            tokens.append(
-                (Structure.NONE, "F")
-            )  # Yes, lambda filters really are just lambda followed by F
-        elif structure == Structure.SORT:
-            tokens.append((Structure.LAMBDA, structure_data))
-            tokens.append(
-                (Structure.NONE, "ṡ")
-            )  # Yes, lambda sorts really are just lambda followed by ṡ
-        elif structure == Structure.NUMBER:
+        if structure == Structure.NUMBER:
             tokens.append((Structure.NUMBER, structure_data[active_key]))
         elif structure == Structure.LIST:
             structure_data[Keys.LIST_ITEMS].append(structure_data[Keys.LIST_ITEM])
@@ -438,34 +406,29 @@ def Tokenise(source: str, variables_are_digraphs=False):
                 structure_data[default_key] = structure_data[active_key]
                 del structure_data[active_key]
             tokens.append((structure, structure_data))
+
     return tokens
 
 
 if __name__ == "__main__":
     tests = [
-        "123.456`hello`789 42→x`world` ←x",
-        "‡∆p-Ẋ1=",
-        "‛`a",
-        "‡∆p-Ẋ1=",
-        "‡ab",
-        "`\\``",
-        "‡kAkA",
-        "vøD",
-        ".",
-        "‛| mm",
-        "‛`0`\`0`",
-        "k\\",
-        "₌+-",
-        "«S⊍ǐ/µȦġk*∪±c*ɖøW₌≤₀e+₇ /)ðaðc~²⊍λġOṙŻZ⁽ɽẇ¼∴ðḂ>⁰IŻ↳Y%⁼ǐ∩\\ǔḞo⁋$∪@ø₇↑^V×Qc□„&<$↲AFðM‟[Ẏ`∵∪SĊ⟩%IHṠλ!q⟩»ꜝ∩=ẏ¼≥ȧ(ε∑²Z₁Ẇġ@Ḃ9d@3ġf₇Ṗꜝµ∞†≥¨ǐ $*∆⇩nTǎ√7Ḃ«",
-        "kv",
-        "5 £ 3 &+ ¥",
-        "₁ƛ₍₃₅kF½*∑∴",
-        "₍₃₅kF½*∑∴",
-        "[11|11]",
-        "1000'∆²;",
+        "123.456`hello`789 42→x`world` ←x ",
+        "'h'e'c'k",
+        '1 2 3W 4 5" 6J +v',
+        "ABƝ",
+        "1[23|45]",
+        "++-%3Ƥ",
+        "abc\ndefχ",
+        "`abc`",
+        "«abcdef«",
+        "»abcdef»",
+        "“abcdef“",
+        "‘he‘ll‘o ",
+        "+¿",
+        "λ2|ancd;",
+        "2%0=χ 5$e",
+        "{1|}",
     ]
 
     for test in tests:
-        print(test, group_strings(group_two_byte_strings(test)))
-        print([(n[0], n[1]) for n in Tokenise(test)])
-    input()
+        print(test, parse(test))
