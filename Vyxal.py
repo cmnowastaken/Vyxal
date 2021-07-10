@@ -1,22 +1,22 @@
-from VyParse import *
-from commands import *
-import encoding
-import utilities
-
 import random
-import regex
 import secrets
 import string
-import sympy
 import sys
 import types
 
 import pwn
+import regex
+import sympy
 
-context_level = 0
-context_values = [0]
-global_stack = []
-input_level = 0
+import encoding
+import utilities
+from commands import *
+from VyParse import *
+
+context_level = 0  # the current depth of control structures
+context_values = [0]  # the values of `n` for each structure
+global_stack = []  # used with ⁽ ↕ ⁾
+input_level = 0  # the current depth of input
 inputs = []
 input_values = {0: [inputs, 0]}  # input_level: [source, input_index]
 last_popped = []
@@ -365,6 +365,14 @@ def head_extract(lhs, rhs):
         (ts[0], number): lambda: iterable(lhs)[0:rhs],
         (str, str): lambda: regex.compile(lhs).findall(rhs),
     }.get(ts, lambda: vectorise(head_extract, lhs, rhs))()
+
+
+def head_slice(lhs, rhs):
+    ts = VY_type(lhs, rhs)
+    return {
+        (ts[0], number): lambda: iterable(lhs)[int(rhs) :],
+        (str, str): lambda: regex.compile(lhs).match(rhs).groups(),
+    }.get(ts, lambda: vectorise(head_slice, lhs, rhs))()
 
 
 def index(lhs, rhs):
