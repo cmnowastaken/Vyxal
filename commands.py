@@ -106,6 +106,7 @@ command_dict = {
     "r": ("rhs, lhs = pop(stack, 2); stack.append(orderless_range(lhs, rhs))", 2),
     "s": ("stack.append(VY_sorted(pop(stack)))", 1),
     "t": ("rhs, lhs = pop(stack, 2); stack.append(head_slice(lhs, rhs))", 1),
+    "u": (),
 }
 
 transformers = {  # the {} is where the t_lambda goes

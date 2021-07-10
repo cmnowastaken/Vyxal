@@ -412,6 +412,32 @@ def iterable(lhs, t=None):
         return lhs
 
 
+def iterable_shift(vector, direction, times=1):
+    vector = deref(iterable(vector))
+    t_vector = type(vector)
+    for _ in range(times):
+        if direction == ShiftDirections.LEFT:
+            if t_vector is list:
+                # [1, 2, 3] -> [2, 3, 1]
+                vector = vector[::-1]
+                temp = pop(vector)
+                vector = vector[::-1]
+                vector.append(temp)
+            else:
+                # abc -> bca
+                vector = join(vector[1:], vector[0])
+        elif direction == ShiftDirections.RIGHT:
+            if t_vector is list:
+                # [1, 2, 3] -> [3, 1, 2]
+                temp = pop(vector)
+                vector.insert(0, temp)
+            else:
+                # abc -> cab
+                vector = join(vector[-1], vector[:-1])
+
+    return vector
+
+
 def join(lhs, rhs):
     ts = VY_type(lhs, rhs, simple=True)
     if ts[0] is list:
