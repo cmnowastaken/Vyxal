@@ -351,6 +351,10 @@ def apply_at(lhs, rhs, other, ctx):
                        indices are in another list
     """
 
+    if vy_type(lhs) == types.FunctionType:
+        return apply_at(rhs, other, lhs, ctx)
+    if vy_type(rhs) == types.FunctionType:
+        return apply_at(lhs, other, rhs, ctx)
     lhs = iterable(lhs, ctx=ctx)
     rhs = wrapify(rhs)
     for pos in rhs:
@@ -419,7 +423,8 @@ def assign_iterable(lhs, rhs, other, ctx):
         def gen():
             yield from lhs[:rhs]
             yield other
-            yield from lhs[rhs + 1 :]
+            if rhs != -1:
+                yield from lhs[rhs + 1 :]
 
         return gen()
 
@@ -2787,7 +2792,6 @@ def monadic_maximum(lhs, ctx):
     """Element G
     (any) -> Maximal element of the input
     """
-
     if len(lhs) == 0:
         return []
     else:
@@ -3089,6 +3093,21 @@ def nth_pi(lhs, ctx):
         (str): lambda: str(lhs)
         # (str): lambda: str(sympy.integrate(make_expression(lhs))),
     }.get(ts, lambda: vectorise(nth_pi, lhs, ctx=ctx))()
+
+
+def one_length_range(lhs, ctx):
+    """Element ż
+    (any) -> range(1, len(a) + 1) (Inclusive range from 1 to length of a)
+    """
+
+    @lazylist
+    def gen():
+        count = sympy.nsimplify(1)
+        for item in lhs:
+            yield count
+            count += 1
+
+    return gen()
 
 
 def one_slice(lhs, rhs, ctx):
@@ -3877,8 +3896,21 @@ def run_length_decoding(lhs, ctx):
     """Element ød
     (lst) -> Run length decoding
     """
-    temp = list(map(lambda elem: elem[0] * elem[1], lhs))
-    if all(isinstance(x[0], str) for x in lhs):
+    temp = flatten_by(
+        list(
+            map(
+                lambda elem: (
+                    [elem[1]] * elem[0]
+                    if isinstance(elem[1], str)
+                    else [elem[0]] * elem[1]
+                ),
+                lhs,
+            )
+        ),
+        1,
+        ctx=ctx,
+    )
+    if all(isinstance(x, str) for x in temp):
         return "".join(temp)
     else:
         return LazyList(temp)
@@ -5493,6 +5525,21 @@ def wrap(lhs, rhs, ctx):
             return gen()
 
 
+def zero_length_range(lhs, ctx):
+    """Element ẏ
+    (any) -> range(0, len(a)) (exlcusive range from 0 to length of a)
+    """
+
+    @lazylist
+    def gen():
+        count = sympy.nsimplify(0)
+        for _ in lhs:
+            yield count
+            count += 1
+
+    return gen()
+
+
 def zero_matrix(lhs, ctx):
     """Element Þm
     Return a matrix with dimensions each item of a, where the first is the
@@ -5541,6 +5588,33 @@ def zfiller(lhs, rhs, ctx):
         + lhs,
         (str, str): lambda: lhs.zfill(len(rhs)),
     }.get(ts, lambda: vectorise(zfiller, lhs, rhs, ctx=ctx))()
+
+
+def dyadic_runl_decode(lhs, rhs, ctx: Context):
+    """Element øḊ
+    (any, any) -> run length decode a with lengths b
+    """
+    return run_length_decoding(vy_zip(lhs, rhs, ctx=ctx), ctx=ctx)
+
+
+def separate_runl_encode(lhs, ctx: Context):
+    """Element øĖ
+    (any) -> run length encode a and push items and lengths both to the stack separately
+    """
+    enc = run_length_encoding(lhs, ctx)
+    items, lengths = transpose(enc)
+    ctx.stacks[-1].append(items)
+    return lengths
+
+
+def mod_pow(lhs, rhs, other, ctx: Context):
+    """Element ∆%
+    (any, any, any) -> a ** b mod c
+    """
+    ts = vy_type(lhs, rhs, other, simple=True)
+    if list in ts:
+        return vectorise(mod_pow, lhs, rhs, other, ctx=ctx)
+    return sympy.nsimplify(pow(int(lhs), int(rhs), int(other)), rational=True)
 
 
 elements: dict[str, tuple[str, int]] = {
@@ -5713,8 +5787,8 @@ elements: dict[str, tuple[str, int]] = {
     ),
     "ẇ": process_element(wrap, 2),
     "ẋ": process_element(repeat, 2),
-    "ẏ": process_element("LazyList(range(0, len(iterable(lhs, ctx))))", 1),
-    "ż": process_element("LazyList(range(1, len(iterable(lhs, ctx)) + 1))", 1),
+    "ẏ": process_element(zero_length_range, 1),
+    "ż": process_element(one_length_range, 1),
     "√": process_element(square_root, 1),
     "₀": process_element("10", 0),
     "₁": process_element("100", 0),
@@ -5874,6 +5948,7 @@ elements: dict[str, tuple[str, int]] = {
     "∆Ė": process_element(e_digits, 1),
     "∆f": process_element(nth_fibonacci, 1),
     "∆±": process_element(copy_sign, 2),
+    "∆%": process_element(mod_pow, 3),
     "∆K": process_element(divisor_sum, 1),
     "∆e": process_element(expe, 1),
     "∆E": process_element(expe_minus_1, 1),
@@ -5919,7 +5994,9 @@ elements: dict[str, tuple[str, int]] = {
     "ød": process_element(run_length_decoding, 1),
     "øD": process_element(optimal_compress, 1),
     "øḋ": process_element("str(float(lhs))", 1),
+    "øḊ": process_element(dyadic_runl_decode, 2),
     "øe": process_element(run_length_encoding, 1),
+    "øĖ": process_element(separate_runl_encode, 1),
     "ø↲": process_element(custom_pad_left, 3),
     "ø↳": process_element(custom_pad_right, 3),
     "øM": process_element(flip_brackets_vertical_palindromise, 1),
@@ -6211,6 +6288,12 @@ modifiers: dict[str, str] = {
         "rhs, lhs = pop(stack, 2, ctx)\n"
         "zipped = vy_zip(lhs, rhs, ctx)\n"
         "mapped = map(lambda item, function_A=function_A, ctx=ctx: vy_reduce(function_A, item, ctx), zipped)\n"
+        "stack.append(LazyList(mapped))\n"
+    ),
+    "¨p": (
+        "lhs = pop(stack, 1, ctx)\n"
+        "over = overlapping_groups(lhs, 2, ctx)\n"
+        "mapped = map(lambda item, function_A=function_A, ctx=ctx: vy_reduce(function_A, item, ctx), over)\n"
         "stack.append(LazyList(mapped))\n"
     ),
 }
