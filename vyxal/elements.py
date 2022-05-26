@@ -1439,7 +1439,7 @@ def find(lhs, rhs, ctx):
         if vy_type(lhs) is LazyList and lhs.infinite:
             while strict_less_than(
                 lhs[pos], rhs, ctx
-            ) or not non_vectorising_equals(lhs[pos], rhs, ctx):
+            ) or non_vectorising_equals(lhs[pos], rhs, ctx):
                 if non_vectorising_equals(index(lhs, pos, ctx), rhs, ctx):
                     return pos
                 pos += 1
@@ -2328,7 +2328,7 @@ def is_prime(lhs, ctx):
     return {
         NUMBER_TYPE: lambda: int(sympy.ntheory.isprime(lhs)),
         str: lambda: case_of(lhs),
-    }.get(ts, vectorise(is_prime, lhs, ctx=ctx))()
+    }.get(ts, lambda: vectorise(is_prime, lhs, ctx=ctx))()
 
 
 def is_sorted_ascending(lhs, ctx):
@@ -2362,7 +2362,7 @@ def is_square(lhs, ctx):
             int(lhs) == lhs and sympy.ntheory.primetest.is_square(lhs)
         ),
         str: lambda: str(sympy.expand(make_expression(lhs + " ** 2"))),
-    }.get(ts, vectorise(is_square, lhs, ctx=ctx))()
+    }.get(ts, lambda: vectorise(is_square, lhs, ctx=ctx))()
 
 
 def is_unordered(lhs, ctx):
@@ -2459,7 +2459,15 @@ def lift(lhs, ctx):
     """Element Þż
     (any) -> a * 1...a.length
     """
-    return multiply(lhs, LazyList(range(1, len(lhs) + 1)), ctx=ctx)
+
+    @lazylist
+    def gen():
+        i = 1
+        for item in lhs:
+            yield item * i
+            i += 1
+
+    return gen()
 
 
 def ljust(lhs, rhs, other, ctx):
@@ -3338,6 +3346,7 @@ def polynomial_from_roots(lhs, ctx):
     """Element ∆ṙ
     (lst) -> Get the polynomial with coefficients from the roots of a polynomial
     """
+    assert all(vy_type(x) == NUMBER_TYPE for x in lhs)
     eqn = " * ".join(map(lambda x: "(x - " + str(x) + ")", lhs))
     x = sympy.symbols("x")
     return sympy.Poly(eqn, x).coeffs()
@@ -4508,7 +4517,7 @@ def to_degrees(lhs, ctx):
     ts = vy_type(lhs)
     return {
         NUMBER_TYPE: lambda: lhs * (180 / sympy.pi),
-        str: lambda: sympy.N(lhs) * (180 / sympy.pi),
+        str: lambda: int(lhs) * (180 / sympy.pi),
     }.get(ts, lambda: vectorise(to_degrees, lhs, ctx=ctx))()
 
 
@@ -4519,7 +4528,7 @@ def to_radians(lhs, ctx):
     ts = vy_type(lhs)
     return {
         NUMBER_TYPE: lambda: lhs * (sympy.pi / 180),
-        str: lambda: sympy.N(lhs) * (sympy.pi / 180),
+        str: lambda: int(lhs) * (sympy.pi / 180),
     }.get(ts, lambda: vectorise(to_radians, lhs, ctx=ctx))()
 
 
@@ -5376,7 +5385,7 @@ def vy_round(lhs, ctx):
         str: lambda: vertical_mirror(lhs, ctx=ctx)
         + "\n"
         + vertical_mirror(lhs, ctx=ctx)[::-1],
-    }.get(ts, vectorise(vy_round, lhs, ctx=ctx))()
+    }.get(ts, lambda: vectorise(vy_round, lhs, ctx=ctx))()
 
 
 def vy_type(item, rhs=None, other=None, simple=False):
